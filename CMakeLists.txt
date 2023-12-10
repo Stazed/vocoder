@@ -6,9 +6,21 @@ project (voc)
 
 set (PACKAGE_VERSION "1.0.0")
 
+option (BuildForDebug "Include gdb debugging support" OFF)
+
 set(ExternLibraries
     fftw3
 )
+
+set (BuildOptionsDebug
+    "-std=c++11 -Wno-cast-function-type -O0 -g3 -ggdb -Wall -Wextra -Wpointer-arith"
+    CACHE STRING "Debug build flags"
+)
+
+if (BuildForDebug)
+    set (CMAKE_BUILD_TYPE "Debug")
+    set (CMAKE_CXX_FLAGS_DEBUG ${BuildOptionsDebug})
+endif(BuildForDebug)
 
 add_subdirectory(plugins/voc)
 
