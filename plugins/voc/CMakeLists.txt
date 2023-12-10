@@ -18,6 +18,7 @@ set_target_properties(voc_clap PROPERTIES OUTPUT_NAME "voc")
 set_target_properties(voc_clap PROPERTIES PREFIX "")
 
 target_link_libraries (voc_lv2 ${ExternLibraries})
+target_link_libraries (voc_clap ${ExternLibraries})
 
 
 install(TARGETS voc_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/voc.lv2/)
