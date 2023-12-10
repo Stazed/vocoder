@@ -27,16 +27,6 @@
 
 #include "DSP.hpp"
 
-typedef struct {
-  float min;
-  float max;
-  float default_value;
-  char toggled;
-  char integer;
-  char logarithmic;
-} peg_data_t;
-
-
 #define M_2PI 6.2831853071795
 #define MAX_FRAME_LENGTH 4096
 
@@ -90,9 +80,7 @@ VocProc::VocProc(double rate)
 VocProc::~VocProc(){
 
     free(gInFIFO);
-#ifndef NO_VOCODER
     free(gIn2FIFO);
-#endif
     free(gOutFIFO);
     free(gOutputAccum);
 
@@ -114,11 +102,6 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
     const float *const input1 = inputs[1];
 
     float *output0 = outputs[0];
-
-    const float conversionTable[]={
-        0.500000, 0.529731, 0.561231, 0.594603, 0.629960, 0.667419, 0.707106, 0.749153, 0.793700, 0.840896, 0.890898, 0.943874, 
-        1.000000, 1.059463, 1.122462, 1.189207, 1.259921, 1.334840, 1.414214, 1.498307, 1.587401, 1.681793, 1.781797, 1.887749, 2.000000
-    };
 
     static float gLastPhase[MAX_FRAME_LENGTH/2+1];
     static float gSumPhase[MAX_FRAME_LENGTH/2+1];
@@ -185,13 +168,6 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
             fftw_execute(fftPlan);
             fftw_destroy_plan(fftPlan);
 
-            // pitch correction
-    /*        if(cAutoTune){
-                float freq;
-                freq=pitchFrequency(fftTmpC);
-                setPitchFactor(freq);
-            }
-*/
             memcpy(fftOldC, fftTmpC, fftFrameSize*sizeof(fftw_complex));
 
             // pitch shifting with phase vocoder
@@ -210,10 +186,12 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
             phaseVocSynthesis(fftTmpC, gSumPhase, gSynMagn, gSynFreq, freqPerBin, expct);
 
             // formant correction + vocoder
-            if(cFormantVoco){
+            if(cFormantVoco)
+            {
                 float env1[fftFrameSize2], env2[fftFrameSize2];
 
-                if(sSwitch){
+                if(sSwitch)
+                {
                     dPointer=fftTmpR; fPointer=gIn2FIFO; fPointer2=window;
                     for (k = 0; k < fftFrameSize;k++) {
                         *dPointer++=*(fPointer++) * *(fPointer2++);
@@ -337,8 +315,8 @@ void VocProc::phaseVocSynthesis(fftw_complex *block, float *gSumPhase, float *gS
 
 void VocProc::spectralEnvelope(float *env, fftw_complex *fft, uint32_t nframes){
 
-    int nTaps=20;
-    int nTaps2=10;
+    unsigned int nTaps=20;
+    unsigned int nTaps2=10;
     float tmp[nframes+nTaps];
 
     float h[]={ // h=(firls(20, [0 0.02 0.1 1], [1 1 0 0]));
@@ -349,13 +327,13 @@ void VocProc::spectralEnvelope(float *env, fftw_complex *fft, uint32_t nframes){
 
     // |H(w)|
     memset(tmp,  0, (nframes+nTaps)*sizeof(float));
-    for(int k=0;k<nframes;k++)
+    for(unsigned int k=0;k<nframes;k++)
         tmp[k]=sqrt(fft[k][0]*fft[k][0]+fft[k][1]*fft[k][1]);
 
     memset(env, 0, nframes*sizeof(float));
 
     // magnitude spectrum filtering
-    int i, j;
+    unsigned int i, j;
     float *p_h, *p_z, accum;
 
     float z[2 * nTaps];

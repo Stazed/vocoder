@@ -8,7 +8,7 @@ class voc : public Plugin {
     public:
         voc() : Plugin(kParameterCount, 0, 0), bypass(1.0)
         {
-            v_process = new VocProc(44100);
+            v_process = new VocProc(Plugin::getSampleRate());
         }
         
         ~voc()
