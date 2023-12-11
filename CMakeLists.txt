@@ -8,6 +8,12 @@ set (PACKAGE_VERSION "1.0.0")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
 
+find_package(Threads REQUIRED)
+if(THREADS_HAVE_PTHREAD_ARG)
+  set_property(TARGET voc PROPERTY COMPILE_OPTIONS "-pthread")
+  set_property(TARGET voc PROPERTY INTERFACE_COMPILE_OPTIONS "-pthread")
+endif()
+
 set(ExternLibraries
     fftw3
 )

@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 #include <fftw3.h>
+#include <pthread.h>
 #include <string.h>     // because of memset
 #include <stdlib.h>
 #include <math.h>
@@ -43,12 +44,13 @@ class VocProc
         fftw_complex *fftTmpC;
         fftw_complex *fftOldC;
         fftw_complex *fftCeps;
-        fftw_plan fftPlan;
+        fftw_plan fftPlan1;
+        fftw_plan fftPlan2;
+        fftw_plan fftPlanInv;
 
         void    spectralEnvelope(float *env, fftw_complex *fft, uint32_t nframes);
 
         float   pitchFrequency(fftw_complex *block);
-    //    void    setPitchFactor(float freq);
 
         void    phaseVocAnalysis(fftw_complex *block, float *gLastPhase, double freqPerBin, double expct, float *gAnaMagn, float *gAnaFreq);
         void    phaseVocSynthesis(fftw_complex *block, float *gSumPhase, float *gSynMagn, float *gSynFreq, double freqPerBin, double expct);

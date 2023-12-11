@@ -32,6 +32,8 @@
 
 #define ROUND(a) ((float)((int)(a+0.5)))
 
+static pthread_mutex_t fftw_planner_lock = PTHREAD_MUTEX_INITIALIZER;
+
 // initialization
 VocProc::VocProc(double rate)
 {
@@ -76,8 +78,20 @@ VocProc::VocProc(double rate)
     fftOldC=(fftw_complex*)fftw_malloc(sizeof(fftw_complex)*fftFrameSize);
     fftCeps=(fftw_complex*)fftw_malloc(sizeof(fftw_complex)*fftFrameSize);
 
+    pthread_mutex_lock (&fftw_planner_lock);
+    fftPlan1=fftw_plan_dft_r2c_1d(fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
+    fftPlan2=fftw_plan_dft_r2c_1d(fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
+    fftPlanInv=fftw_plan_dft_c2r_1d(fftFrameSize, fftTmpC, fftTmpR, FFTW_ESTIMATE);
+    pthread_mutex_unlock (&fftw_planner_lock);
+    
 }
-VocProc::~VocProc(){
+VocProc::~VocProc()
+{
+    pthread_mutex_lock (&fftw_planner_lock);
+    fftw_destroy_plan(fftPlan1);
+    fftw_destroy_plan(fftPlan2);
+    fftw_destroy_plan(fftPlanInv);
+    pthread_mutex_unlock (&fftw_planner_lock);
 
     free(gInFIFO);
     free(gIn2FIFO);
@@ -164,10 +178,8 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
             powerIn=tmpPower/(float)fftFrameSize;
 
             // do transform
-            fftPlan=fftw_plan_dft_r2c_1d(fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
-            fftw_execute(fftPlan);
-            fftw_destroy_plan(fftPlan);
-
+            fftw_execute(fftPlan1);
+ 
             memcpy(fftOldC, fftTmpC, fftFrameSize*sizeof(fftw_complex));
 
             // pitch shifting with phase vocoder
@@ -197,9 +209,7 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
                         *dPointer++=*(fPointer++) * *(fPointer2++);
                     }
 
-                    fftPlan=fftw_plan_dft_r2c_1d(fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
-                    fftw_execute(fftPlan);
-                    fftw_destroy_plan(fftPlan);
+                    fftw_execute(fftPlan2);
                 }
 
                 spectralEnvelope(env1, fftOldC, fftFrameSize2);
@@ -217,9 +227,7 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
             }
 
             // do inverse transform
-            fftPlan=fftw_plan_dft_c2r_1d(fftFrameSize, fftTmpC, fftTmpR, FFTW_ESTIMATE);
-            fftw_execute(fftPlan);
-            fftw_destroy_plan(fftPlan);
+            fftw_execute(fftPlanInv);
 
             fPointer=gOutputAccum; dPointer=fftTmpR; fPointer2=window;
             for(k=0; k < fftFrameSize; k++) {
@@ -348,59 +356,4 @@ void VocProc::spectralEnvelope(float *env, fftw_complex *fft, uint32_t nframes){
         if (--state < 0) state += nTaps;
         if(j>=nTaps2) env[j-nTaps2]=accum;
     }
-}
-
-float VocProc::pitchFrequency(fftw_complex *block){
-    // cepstral method - needs improvement but good for now
-
-    float freq;
-    int i;
-    double cepst[fftFrameSize/2];
-    memset(cepst, 0, (fftFrameSize/2)*sizeof(double));
-    
-    int ppMin, ppMax;
-    double max1;
-    float pitch=0;
-
-    //double fftTmpReal[fftFrameSize];
-    //fftw_complex fftTmpCplx[fftFrameSize];
-
-    for(i=0;i<fftFrameSize/2;i++){
-        fftCeps[i][0]=log(sqrt(pow(block[i][0], 2)+pow(block[i][1], 2))+1e-6)/(float)fftFrameSize;
-        fftCeps[i][1]=0;
-    }
-
-    fftPlan=fftw_plan_dft_c2r_1d(fftFrameSize, fftCeps, fftTmpR, FFTW_ESTIMATE);
-    fftw_execute(fftPlan);
-    fftw_destroy_plan(fftPlan);
-
-    // normalize
-    for(i=0;i<fftFrameSize/2;i++) cepst[i]=fabs(fftTmpR[i]/(float)fftFrameSize)+1e6;
-
-    ppMax=fftFrameSize/2-2;
-    ppMin=fSamplingFreq/1200; // fMax=1200
-
-    // find maximum of HTP cepstrum
-    max1=0;
-    for(i=ppMin;i<=ppMax;i++){
-        if(cepst[i]>max1){
-            max1=cepst[i];
-            pitch=i;
-        }
-    }
-
-    // interpolate between two samples
-    int idx=pitch;
-    if(idx == 0)
-        idx = 1;
-    int l1;
-
-    if(cepst[idx-1]>cepst[idx+1]) l1=pitch-1;
-    else l1=pitch;
-
-    pitch=l1+1/(cepst[l1]/cepst[l1+1]+1);
-
-    freq=fSamplingFreq/pitch;
-
-    return freq;
 }
