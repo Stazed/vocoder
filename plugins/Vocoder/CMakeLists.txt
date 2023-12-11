@@ -16,6 +16,7 @@ set_target_properties(Vocoder_clap PROPERTIES LIBRARY_OUTPUT_DIRECTORY "clap")
 set_target_properties(Vocoder_clap PROPERTIES RUNTIME_OUTPUT_DIRECTORY "clap")
 set_target_properties(Vocoder_clap PROPERTIES OUTPUT_NAME "Vocoder")
 set_target_properties(Vocoder_clap PROPERTIES PREFIX "")
+set_target_properties(Vocoder_clap PROPERTIES SUFFIX ".clap")
 
 target_link_libraries (Vocoder_lv2 ${ExternLibraries})
 target_link_libraries (Vocoder_clap ${ExternLibraries})
@@ -32,6 +33,5 @@ add_dependencies(Vocoder_lv2 lv2-ttl-generator)
 
 install(FILES
 	${CMAKE_CURRENT_BINARY_DIR}/lv2/manifest.ttl
-	${CMAKE_CURRENT_BINARY_DIR}/lv2/presets.ttl
 	${CMAKE_CURRENT_BINARY_DIR}/lv2/Vocoder.ttl
 	DESTINATION ${PluginLibDir}/lv2/Vocoder.lv2/)
