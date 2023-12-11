@@ -23,6 +23,7 @@ class Vocoder : public Plugin {
             return "Simple vocoder plugin.";
         }
         const char *getMaker() const override { return "Stazed"; }
+        const char* getHomePage() const override { return "https://Stazed@github.com/Stazed/vocoder"; }
         const char *getLicense() const override { return "GPL2"; }
         uint32_t getVersion() const override { return d_version(1,0,0); }
         int64_t getUniqueId() const override { 

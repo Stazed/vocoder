@@ -21,6 +21,13 @@ set(ExternLibraries
     fftw3
 )
 
+set(CMAKE_BUILD_TYPE "Release")
+
+set (BuildOptionsBasic
+    "-Wno-unused-parameter -O3 -fvisibility=hidden"
+    CACHE STRING "basic X86 complier options"
+)
+
 set (BuildOptionsDebug
     "-std=c++11 -Wno-cast-function-type -O0 -g3 -ggdb -Wall -Wextra -Wpointer-arith"
     CACHE STRING "Debug build flags"
@@ -29,6 +36,9 @@ set (BuildOptionsDebug
 if (BuildForDebug)
     set (CMAKE_BUILD_TYPE "Debug")
     set (CMAKE_CXX_FLAGS_DEBUG ${BuildOptionsDebug})
+else(BuildForDebug)
+    set(CMAKE_BUILD_TYPE "Release")
+    set (CMAKE_CXX_FLAGS_RELEASE ${BuildOptionsBasic})
 endif(BuildForDebug)
 
 add_subdirectory(plugins/Vocoder)

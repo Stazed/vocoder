@@ -8,6 +8,7 @@
 #define DISTRHO_PLUGIN_NUM_INPUTS   2
 #define DISTRHO_PLUGIN_NUM_OUTPUTS  1
 #define DISTRHO_PLUGIN_IS_RT_SAFE   1
+#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:ModulatorPlugin"
 
 enum Parameters {
     kBypass,
