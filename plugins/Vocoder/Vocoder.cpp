@@ -4,21 +4,21 @@
 
 START_NAMESPACE_DISTRHO
 
-class voc : public Plugin {
+class Vocoder : public Plugin {
     public:
-        voc() : Plugin(kParameterCount, 0, 0), bypass(1.0)
+        Vocoder() : Plugin(kParameterCount, 0, 0), bypass(1.0)
         {
             v_process = new VocProc(Plugin::getSampleRate());
         }
         
-        ~voc()
+        ~Vocoder()
         {
             if(v_process)
                 delete v_process;
         }
     protected:
 
-        const char *getLabel() const override { return "voc"; }
+        const char *getLabel() const override { return "Vocoder"; }
         const char *getDescription() const override {
             return "Simple vocoder plugin.";
         }
@@ -74,13 +74,13 @@ class voc : public Plugin {
         float bypass;
         VocProc *v_process;
 
-        DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(voc);
+        DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Vocoder);
 };
 
 
 Plugin *createPlugin()
 {
-    return new voc();
+    return new Vocoder();
 }
 
 END_NAMESPACE_DISTRHO
