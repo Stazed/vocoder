@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_NAME  "Vocoder"
-#define DISTRHO_PLUGIN_URI   "https://Stazed@github.com/Stazed/vocoder"
+#define DISTRHO_PLUGIN_URI   "https://github.com/Stazed/vocoder.git"
 #define DISTRHO_PLUGIN_CLAP_ID "com.stazed.github.vocoder"
 
 #define DISTRHO_PLUGIN_NUM_INPUTS   2
