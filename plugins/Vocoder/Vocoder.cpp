@@ -6,7 +6,7 @@ START_NAMESPACE_DISTRHO
 
 class Vocoder : public Plugin {
     public:
-        Vocoder() : Plugin(kParameterCount, 0, 0), bypass(1.0)
+        Vocoder() : Plugin(kParameterCount, 0, 0), bypass(0.0)
         {
             v_process = new VocProc(Plugin::getSampleRate());
         }
@@ -32,9 +32,10 @@ class Vocoder : public Plugin {
     void initParameter (uint32_t index, Parameter& parameter) override {
         switch (index) {
             case kBypass:
+                parameter.hints = kParameterIsAutomatable|kParameterIsBoolean|kParameterIsInteger;
                 parameter.name = "Bypass";
                 parameter.symbol = "bypass";
-                parameter.ranges.def = 1.0f;
+                parameter.ranges.def = 0.0f;
                 parameter.ranges.min = 0.0f;
                 parameter.ranges.max = 1.0f;
                 break;
@@ -48,7 +49,7 @@ class Vocoder : public Plugin {
         case kBypass:
             return bypass;
         default:
-            return 1.0;
+            return 0.0;
         }
     }
 

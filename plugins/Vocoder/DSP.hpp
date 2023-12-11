@@ -63,7 +63,7 @@ class VocProc
         ~VocProc();
 
         void run(const float **inputs, float **outputs, uint32_t nframes);
-        void set_bypass(float bypass) {sSwitch = bypass;}
+        void set_bypass(float bypass);
 };
 
 

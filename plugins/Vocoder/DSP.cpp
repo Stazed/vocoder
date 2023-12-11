@@ -357,3 +357,13 @@ void VocProc::spectralEnvelope(float *env, fftw_complex *fft, uint32_t nframes){
         if(j>=nTaps2) env[j-nTaps2]=accum;
     }
 }
+
+void VocProc::set_bypass(float bypass)
+{
+    if ( bypass )
+    {
+        sSwitch = 0.0;
+    }
+    else
+        sSwitch = 1.0;
+}
