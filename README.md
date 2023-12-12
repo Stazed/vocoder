@@ -2,7 +2,7 @@
 Vocoder
 =======
 
-Vocoder is a simple LV2/CLAP plugin for vocoding based on VocProc by Igor Brkic <igor@hyperglitch.com>.
+Vocoder is a simple LADSPA/LV2/CLAP plugin for vocoding based on VocProc by Igor Brkic <igor@hyperglitch.com>.
 The plugin is built using the DPF framework and you must download the DPF submodule with:
 
 ```bash
