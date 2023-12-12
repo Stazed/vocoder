@@ -43,7 +43,7 @@ class Vocoder : public Plugin {
         const char *getLicense() const override { return "GPL2"; }
         uint32_t getVersion() const override { return d_version(1,0,0); }
         int64_t getUniqueId() const override { 
-            return d_cconst('V','O','C','T'); 
+            return d_cconst('V','O','C','1'); 
         }
     
     void initParameter (uint32_t index, Parameter& parameter) override {
