@@ -1,6 +1,6 @@
 #CMake file for Vocoder LV2/CLAP
 
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.5.1...3.31.1)
 
 project (Vocoder)
 
@@ -44,6 +44,7 @@ endif(BuildForDebug)
 add_subdirectory(plugins/Vocoder)
 
 add_executable(lv2-ttl-generator ${CMAKE_SOURCE_DIR}/DPF/utils/lv2-ttl-generator/lv2_ttl_generator.c)
+target_link_libraries(lv2-ttl-generator dl)
 
 # uninstall target
 if(NOT TARGET uninstall)
