@@ -28,7 +28,6 @@
 #include <cassert>
 
 #define M_2PI 6.283185307179586
-#define MAX_FRAME_LENGTH 4096
 
 #ifndef KISSFFT_SUPPORT
 static pthread_mutex_t fftw_planner_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -67,6 +66,16 @@ VocProc::VocProc(double rate)
     gIn2FIFO     = (float*)calloc(fftFrameSize, sizeof(float));
     gOutFIFO     = (float*)calloc(fftFrameSize, sizeof(float));
     gOutputAccum = (float*)calloc(2 * fftFrameSize, sizeof(float));
+
+    memset(gLastPhase, 0, sizeof(gLastPhase));
+    memset(gSumPhase,  0, sizeof(gSumPhase));
+    memset(gAnaFreq, 0, sizeof(gAnaFreq));
+    memset(gAnaMagn, 0, sizeof(gAnaMagn));
+    memset(gSynFreq, 0, sizeof(gSynFreq));
+    memset(gSynMagn, 0, sizeof(gSynMagn));
+
+    gRover = 0;
+    gInit  = false;
 
 #ifdef KISSFFT_SUPPORT
     fftTmpR = (float*)malloc(sizeof(float) * fftFrameSize);
@@ -123,17 +132,7 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
     const float *inputMod = inputs[0];
     const float *inputCar = inputs[1];
     float *output = outputs[0];
-
-    static float gLastPhase[MAX_FRAME_LENGTH/2 + 1];
-    static float gSumPhase [MAX_FRAME_LENGTH/2 + 1];
-    static float gAnaFreq  [MAX_FRAME_LENGTH];
-    static float gAnaMagn  [MAX_FRAME_LENGTH];
-    static float gSynFreq  [MAX_FRAME_LENGTH];
-    static float gSynMagn  [MAX_FRAME_LENGTH];
-
-    static long gRover = 0;
-    static bool gInit = false;
-
+ 
     const long fftFrameSize2 = fftFrameSize / 2;
     const long stepSize = fftFrameSize / overlap;
     const long fifoLatency = fftFrameSize - stepSize;

@@ -36,6 +36,8 @@
     #include <pthread.h>
 #endif
 
+#define MAX_FRAME_LENGTH 4096
+
 class VocProc
 {
 public:
@@ -70,6 +72,16 @@ private:
     float *gOutFIFO;
     float *gOutputAccum;
     float *window;
+
+    float gLastPhase[MAX_FRAME_LENGTH/2 + 1];
+    float gSumPhase [MAX_FRAME_LENGTH/2 + 1];
+    float gAnaFreq  [MAX_FRAME_LENGTH];
+    float gAnaMagn  [MAX_FRAME_LENGTH];
+    float gSynFreq  [MAX_FRAME_LENGTH];
+    float gSynMagn  [MAX_FRAME_LENGTH];
+
+    long gRover;
+    bool gInit;
 
 #ifdef KISSFFT_SUPPORT
     typedef kiss_fft_cpx fft_complex_t;
