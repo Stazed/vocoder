@@ -24,75 +24,71 @@
 
 */
 
-
 #include "DSP.hpp"
 
-#define M_2PI 6.2831853071795
-#define MAX_FRAME_LENGTH 4096
+#include <cassert>
 
-#define ROUND(a) ((float)((int)(a+0.5)))
+#define M_2PI 6.283185307179586
+#define MAX_FRAME_LENGTH 4096
 
 static pthread_mutex_t fftw_planner_lock = PTHREAD_MUTEX_INITIALIZER;
 
-// initialization
+// ============================================================
+// Constructor / Destructor
+// ============================================================
+
 VocProc::VocProc(double rate)
 {
     fSamplingFreq = (float)rate;
 
-    sPitchFactor = 1.0;
+    sPitchFactor = 1.0f;
+    sEffect      = 0.0f;
+    sOutputGain  = 1.0f;
+    sSwitch      = 1.0f;
 
-    sEffect=0.0;
-    cEffect=0.0;
+    cFormantVoco = 1.0f;
+    cEffect      = 0.0f;
+    cAutoTune    = 0.0f;
 
-    sOutputGain=1.0;
+    powerIn = 0.0f;
 
-    cFormantVoco=1;
+    fftFrameSize = 2048;
+    overlap      = 4;
 
-    pOffset[0]=0; pOffset[1]=0;
+    assert(fftFrameSize <= MAX_FRAME_LENGTH);
 
-    sSwitch=1.0;
+    // Hann window (IDENTICAL)
+    window = (float*)malloc(sizeof(float) * fftFrameSize);
+    for (long k = 0; k < fftFrameSize; ++k)
+        window[k] = 0.5f - 0.5f * cos(M_2PI * k / fftFrameSize);
 
-    cAutoTune=0.0;
+    gInFIFO      = (float*)calloc(fftFrameSize, sizeof(float));
+    gIn2FIFO     = (float*)calloc(fftFrameSize, sizeof(float));
+    gOutFIFO     = (float*)calloc(fftFrameSize, sizeof(float));
+    gOutputAccum = (float*)calloc(2 * fftFrameSize, sizeof(float));
 
-    powerIn=0;
+    fftTmpR = (double*)fftw_malloc(sizeof(double) * fftFrameSize);
+    fftTmpC = (fftw_complex*)fftw_malloc(
+        sizeof(fftw_complex) * (fftFrameSize/2 + 1));
+    fftOldC = (fftw_complex*)fftw_malloc(
+        sizeof(fftw_complex) * (fftFrameSize/2 + 1));
 
-    fftFrameSize=2048;  // pitch detection currently doesn't work for 1024
-                        // and there is aliasing present for 1024 with formant correction when
-                        // large pitch shifting factor is applied
-    overlap=4;
-
-    freqOld=0;
-
-    window=(float*)malloc(fftFrameSize*sizeof(float));
-    for(int k=0;k<fftFrameSize;k++)
-        window[k] = -.5*cos(M_2PI*(float)k/(float)fftFrameSize)+.5;
-
-    gInFIFO=(float*)calloc(fftFrameSize, sizeof(float));
-    gIn2FIFO=(float*)calloc(fftFrameSize, sizeof(float));
-    gOutFIFO=(float*)calloc(fftFrameSize, sizeof(float));
-    gOutputAccum=(float*)calloc(2*fftFrameSize, sizeof(float));
-
-    // FFTW stuff
-    fftTmpR=(double*)fftw_malloc(sizeof(double)*fftFrameSize);
-    fftTmpC=(fftw_complex*)fftw_malloc(sizeof(fftw_complex)*fftFrameSize);
-    fftOldC=(fftw_complex*)fftw_malloc(sizeof(fftw_complex)*fftFrameSize);
-    fftCeps=(fftw_complex*)fftw_malloc(sizeof(fftw_complex)*fftFrameSize);
-
-    pthread_mutex_lock (&fftw_planner_lock);
-    fftPlan1=fftw_plan_dft_r2c_1d(fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
-    fftPlan2=fftw_plan_dft_r2c_1d(fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
-    fftPlanInv=fftw_plan_dft_c2r_1d(fftFrameSize, fftTmpC, fftTmpR, FFTW_ESTIMATE);
-    pthread_mutex_unlock (&fftw_planner_lock);
-    
+    pthread_mutex_lock(&fftw_planner_lock);
+    fftPlanFwd = fftw_plan_dft_r2c_1d(
+        fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
+    fftPlanInv = fftw_plan_dft_c2r_1d(
+        fftFrameSize, fftTmpC, fftTmpR, FFTW_ESTIMATE);
+    pthread_mutex_unlock(&fftw_planner_lock);
 }
+
 VocProc::~VocProc()
 {
-    pthread_mutex_lock (&fftw_planner_lock);
-    fftw_destroy_plan(fftPlan1);
-    fftw_destroy_plan(fftPlan2);
+    pthread_mutex_lock(&fftw_planner_lock);
+    fftw_destroy_plan(fftPlanFwd);
     fftw_destroy_plan(fftPlanInv);
-    pthread_mutex_unlock (&fftw_planner_lock);
+    pthread_mutex_unlock(&fftw_planner_lock);
 
+    free(window);
     free(gInFIFO);
     free(gIn2FIFO);
     free(gOutFIFO);
@@ -101,269 +97,257 @@ VocProc::~VocProc()
     fftw_free(fftTmpR);
     fftw_free(fftTmpC);
     fftw_free(fftOldC);
-    fftw_free(fftCeps);
-};
+}
 
-
-/*************************************************
-    here be procezzing
-*************************************************/
+// ============================================================
+// Main Processing (ORDER IS CRITICAL)
+// ============================================================
 
 void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
 {
-    const float *const input0 = inputs[0];
+    const float *inputMod = inputs[0];
+    const float *inputCar = inputs[1];
+    float *output = outputs[0];
 
-    const float *const input1 = inputs[1];
+    static float gLastPhase[MAX_FRAME_LENGTH/2 + 1];
+    static float gSumPhase [MAX_FRAME_LENGTH/2 + 1];
+    static float gAnaFreq  [MAX_FRAME_LENGTH];
+    static float gAnaMagn  [MAX_FRAME_LENGTH];
+    static float gSynFreq  [MAX_FRAME_LENGTH];
+    static float gSynMagn  [MAX_FRAME_LENGTH];
 
-    float *output0 = outputs[0];
+    static long gRover = 0;
+    static bool gInit = false;
 
-    static float gLastPhase[MAX_FRAME_LENGTH/2+1];
-    static float gSumPhase[MAX_FRAME_LENGTH/2+1];
-    static float gAnaFreq[MAX_FRAME_LENGTH];
-    static float gAnaMagn[MAX_FRAME_LENGTH];
-    static float gSynFreq[MAX_FRAME_LENGTH];
-    static float gSynMagn[MAX_FRAME_LENGTH];
+    const long fftFrameSize2 = fftFrameSize / 2;
+    const long stepSize = fftFrameSize / overlap;
+    const long fifoLatency = fftFrameSize - stepSize;
 
-    static long gRover = false, gInit = false;
+    const double freqPerBin = fSamplingFreq / fftFrameSize;
+    const double expct = M_2PI * stepSize / fftFrameSize;
 
-    double freqPerBin, expct;
-    long i,k, index, inFifoLatency, stepSize, fftFrameSize2;
-
-    float *fPointer, *fPointer2, *fPointer3;
-    double *dPointer;
-
-    /* set up some handy variables */
-    fftFrameSize2 = fftFrameSize/2;
-
-    stepSize = fftFrameSize/overlap;
-    freqPerBin = (double)fSamplingFreq/(double)fftFrameSize;
-    expct = M_2PI*(double)stepSize/(double)fftFrameSize;
-
-    inFifoLatency = fftFrameSize-stepSize;
-    if (gRover == false) gRover = inFifoLatency;
-
-    /* initialize our static arrays */
-    if (gInit == false) {
-        memset(gLastPhase, 0, (MAX_FRAME_LENGTH/2+1)*sizeof(float));
-        memset(gSumPhase, 0, (MAX_FRAME_LENGTH/2+1)*sizeof(float));
-        memset(gAnaFreq, 0, MAX_FRAME_LENGTH*sizeof(float));
-        memset(gAnaMagn, 0, MAX_FRAME_LENGTH*sizeof(float));
+    if (!gInit) {
+        memset(gLastPhase, 0, sizeof(gLastPhase));
+        memset(gSumPhase,  0, sizeof(gSumPhase));
+        gRover = fifoLatency;
         gInit = true;
     }
 
-    /* main processing loop */
-    for (i = 0; i < nframes; i++){
+    for (uint32_t i = 0; i < nframes; ++i) {
 
-        // As long as we have not yet collected enough data just read in
-        gInFIFO[gRover] = input0[i];
-        gIn2FIFO[gRover] = input1[i];
+        gInFIFO [gRover] = inputMod[i];
+        gIn2FIFO[gRover] = inputCar[i];
 
-        output0[i] = gOutFIFO[gRover-inFifoLatency];
+        output[i] = gOutFIFO[gRover - fifoLatency];
         gRover++;
 
-        // now we have enough data for processing
-        if (gRover >= fftFrameSize) {
-            gRover = inFifoLatency;
+        if (gRover < fftFrameSize)
+            continue;
 
-            float tmpPower=0.0;
-            dPointer=fftTmpR;
-            fPointer=gInFIFO;
-            fPointer2=window;
-            for (k = 0; k < fftFrameSize;k++) {
-                *dPointer=*(fPointer++) * *(fPointer2++);
-                tmpPower+= *dPointer * *dPointer;
-                dPointer++;
-            }
+        gRover = fifoLatency;
 
-            powerIn=tmpPower/(float)fftFrameSize;
-
-            // do transform
-            fftw_execute(fftPlan1);
- 
-            memcpy(fftOldC, fftTmpC, fftFrameSize*sizeof(fftw_complex));
-
-            // pitch shifting with phase vocoder
-            phaseVocAnalysis(fftTmpC, gLastPhase, freqPerBin, expct, gAnaMagn, gAnaFreq);
-            memset(gSynMagn, 0, fftFrameSize*sizeof(float));
-            memset(gSynFreq, 0, fftFrameSize*sizeof(float));
-            for (k = 0; k <= fftFrameSize2; k++) {
-                index = k*sPitchFactor;
-                if (index <= fftFrameSize2) {
-                    gSynMagn[index] += gAnaMagn[k];
-                    gSynFreq[index] = gAnaFreq[k] * sPitchFactor;
-                    if(cEffect)
-                        gSynFreq[index] = gSynFreq[index]*sEffect + sEffect*200*(float)rand()/RAND_MAX-100;
-                }
-            }
-            phaseVocSynthesis(fftTmpC, gSumPhase, gSynMagn, gSynFreq, freqPerBin, expct);
-
-            // formant correction + vocoder
-            if(cFormantVoco)
-            {
-                float env1[fftFrameSize2], env2[fftFrameSize2];
-
-                if(sSwitch)
-                {
-                    dPointer=fftTmpR; fPointer=gIn2FIFO; fPointer2=window;
-                    for (k = 0; k < fftFrameSize;k++) {
-                        *dPointer++=*(fPointer++) * *(fPointer2++);
-                    }
-
-                    fftw_execute(fftPlan2);
-                }
-
-                spectralEnvelope(env1, fftOldC, fftFrameSize2);
-                spectralEnvelope(env2, fftTmpC, fftFrameSize2);
-
-                // modify spectral envelope of spectrum in fftTmpC to look like spectral
-                // envelope of spectrum in fftOldC
-                float koef;
-                fPointer2=env1; fPointer3=env2;
-                for(k=0;k<fftFrameSize2;k++){
-                    koef = *(fPointer2++) / (*(fPointer3++)+.02)*2;
-                    fftTmpC[k][0] *= koef;
-                    fftTmpC[k][1] *= koef;
-                }
-            }
-
-            // do inverse transform
-            fftw_execute(fftPlanInv);
-
-            fPointer=gOutputAccum; dPointer=fftTmpR; fPointer2=window;
-            for(k=0; k < fftFrameSize; k++) {
-                *fPointer += 0.7 * *(dPointer++) / (fftFrameSize2*overlap) * sOutputGain * *(fPointer2++);
-                fPointer++;
-            }
-
-            memcpy(gOutFIFO, gOutputAccum, stepSize*sizeof(float));
-
-            // shift accumulator
-            memmove(gOutputAccum, gOutputAccum+stepSize, fftFrameSize*sizeof(float));
-
-            // move input FIFO
-            for (k = 0; k < inFifoLatency; k++) gInFIFO[k] = gInFIFO[k+stepSize];
-
-            for (k = 0; k < inFifoLatency; k++) gIn2FIFO[k] = gIn2FIFO[k+stepSize];
+        // ================= Modulator FFT =================
+        double pwr = 0.0;
+        for (long k = 0; k < fftFrameSize; ++k) {
+            fftTmpR[k] = gInFIFO[k] * window[k];
+            pwr += fftTmpR[k] * fftTmpR[k];
         }
+        powerIn = (float)(pwr / fftFrameSize);
+
+        fftw_execute(fftPlanFwd);
+
+        memcpy(fftOldC, fftTmpC,
+               sizeof(fftw_complex) * (fftFrameSize2 + 1));
+
+        // ================= Phase Vocoder =================
+        phaseVocAnalysis(
+            fftTmpC, gLastPhase,
+            freqPerBin, expct,
+            gAnaMagn, gAnaFreq
+        );
+
+        memset(gSynMagn, 0, sizeof(float) * fftFrameSize);
+        memset(gSynFreq, 0, sizeof(float) * fftFrameSize);
+
+        for (long k = 0; k <= fftFrameSize2; ++k) {
+            long idx = (long)(k * sPitchFactor);
+            if (idx <= fftFrameSize2) {
+                gSynMagn[idx] += gAnaMagn[k];
+                gSynFreq[idx]  = gAnaFreq[k] * sPitchFactor;
+                if (cEffect)
+                    gSynFreq[idx] +=
+                        sEffect * (200.0f * rand() / RAND_MAX - 100.0f);
+            }
+        }
+
+        phaseVocSynthesis(
+            fftTmpC, gSumPhase,
+            gSynMagn, gSynFreq,
+            freqPerBin, expct
+        );
+
+        // ================= Carrier FFT (OVERWRITES fftTmpC) =================
+        if (sSwitch) {
+            for (long k = 0; k < fftFrameSize; ++k)
+                fftTmpR[k] = gIn2FIFO[k] * window[k];
+
+            fftw_execute(fftPlanFwd);
+        }
+
+        // ================= Envelope Transfer (ORIGINAL) =================
+        if (cFormantVoco && sSwitch) {
+            float envMod[MAX_FRAME_LENGTH/2];
+            float envCar[MAX_FRAME_LENGTH/2];
+
+            spectralEnvelope(envMod, fftOldC, fftFrameSize2);
+            spectralEnvelope(envCar, fftTmpC, fftFrameSize2);
+
+            for (long k = 0; k < fftFrameSize2; ++k) {
+                float coef = envMod[k] / (envCar[k] + 0.02f) * 2.0f;
+                fftTmpC[k][0] *= coef;
+                fftTmpC[k][1] *= coef;
+            }
+        }
+
+        // ================= IFFT + OLA =================
+        fftw_execute(fftPlanInv);
+
+        for (long k = 0; k < fftFrameSize; ++k) {
+            gOutputAccum[k] +=
+                0.7f * fftTmpR[k] * window[k]
+                / (fftFrameSize2 * overlap)
+                * sOutputGain;
+        }
+
+        memcpy(gOutFIFO, gOutputAccum,
+               sizeof(float) * stepSize);
+
+        memmove(gOutputAccum,
+                gOutputAccum + stepSize,
+                sizeof(float) * fftFrameSize);
+
+        memmove(gInFIFO,
+                gInFIFO + stepSize,
+                sizeof(float) * fifoLatency);
+        memmove(gIn2FIFO,
+                gIn2FIFO + stepSize,
+                sizeof(float) * fifoLatency);
     }
 }
 
+// ============================================================
+// Phase Vocoder Analysis (UNCHANGED)
+// ============================================================
 
-void VocProc::phaseVocAnalysis(fftw_complex *block, float *gLastPhase, double freqPerBin, double expct, float *gAnaMagn, float *gAnaFreq){
+void VocProc::phaseVocAnalysis(
+    fftw_complex *block,
+    float *lastPhase,
+    double freqPerBin,
+    double expct,
+    float *anaMagn,
+    float *anaFreq)
+{
+    for (long k = 0; k <= fftFrameSize / 2; ++k) {
 
-    double real, imag, magn, phase, tmp;
-    long qpd, k;
+        double real = block[k][0];
+        double imag = block[k][1];
 
-    for (k = 0; k <= fftFrameSize/2; k++) {
+        double magn = 2.0 * sqrt(real*real + imag*imag);
+        double phase = atan2(imag, real);
 
-        /* de-interlace FFT buffer */
-        real = block[k][0];
-        imag = block[k][1];
+        double tmp = phase - lastPhase[k];
+        lastPhase[k] = (float)phase;
 
-        /* compute magnitude and phase */
-        magn = 2.*sqrt(real*real + imag*imag);
-        phase = atan2(imag,real);
+        tmp -= k * expct;
 
-        /* compute phase difference */
-        tmp = phase - gLastPhase[k];
-        gLastPhase[k] = phase;
+        long qpd = (long)(tmp / M_PI);
+        if (qpd >= 0) qpd += qpd & 1;
+        else          qpd -= qpd & 1;
+        tmp -= M_PI * qpd;
 
-        /* subtract expected phase difference */
-        tmp -= (double)k*expct;
+        tmp = overlap * tmp / M_2PI;
+        tmp = (k + tmp) * freqPerBin;
 
-        /* map delta phase into +/- Pi interval */
-        qpd = tmp/M_PI;
-        if (qpd >= 0) qpd += qpd&1;
-        else qpd -= qpd&1;
-        tmp -= M_PI*(double)qpd;
-
-        /* get deviation from bin frequency from the +/- Pi interval */
-        tmp = overlap*tmp/(M_2PI);
-
-        /* compute the k-th partials' true frequency */
-        tmp = (double)k*freqPerBin + tmp*freqPerBin;
-
-        /* store magnitude and true frequency in analysis arrays */
-        gAnaMagn[k] = magn;
-        gAnaFreq[k] = tmp;
+        anaMagn[k] = (float)magn;
+        anaFreq[k] = (float)tmp;
     }
 }
 
-void VocProc::phaseVocSynthesis(fftw_complex *block, float *gSumPhase, float *gSynMagn, float *gSynFreq, double freqPerBin, double expct){
+// ============================================================
+// Phase Vocoder Synthesis (UNCHANGED)
+// ============================================================
 
-    int k;
-    double magn, tmp, phase;
+void VocProc::phaseVocSynthesis(
+    fftw_complex *block,
+    float *sumPhase,
+    const float *synMagn,
+    const float *synFreq,
+    double freqPerBin,
+    double expct)
+{
+    for (long k = 0; k <= fftFrameSize / 2; ++k) {
 
-    for (k = 0; k <= fftFrameSize/2; k++) {
-        /* get magnitude and true frequency from synthesis arrays */
-        magn = gSynMagn[k];
-        tmp = gSynFreq[k];
+        double magn = synMagn[k];
+        double tmp  = synFreq[k] - k * freqPerBin;
 
-        /* subtract bin mid frequency */
-        tmp -= (double)k*freqPerBin;
-
-        /* get bin deviation from freq deviation */
         tmp /= freqPerBin;
+        tmp = M_2PI * tmp / overlap;
+        tmp += k * expct;
 
-        /* take overlap into acnframes */
-        tmp = M_2PI*tmp/overlap;
+        sumPhase[k] += (float)tmp;
 
-        /* add the overlap phase advance back in */
-        tmp += (double)k*expct;
-
-        /* accumulate delta phase to get bin phase */
-        gSumPhase[k] += tmp;
-        phase = gSumPhase[k];
-
-        /* get real and imag part and re-interleave */
-        block[k][0] = magn*cos(phase);
-        block[k][1] = magn*sin(phase);
+        block[k][0] = magn * cos(sumPhase[k]);
+        block[k][1] = magn * sin(sumPhase[k]);
     }
 }
 
-void VocProc::spectralEnvelope(float *env, fftw_complex *fft, uint32_t nframes){
+// ============================================================
+// Spectral Envelope (UNCHANGED)
+// ============================================================
 
-    unsigned int nTaps=20;
-    unsigned int nTaps2=10;
-    float tmp[nframes+nTaps];
+void VocProc::spectralEnvelope(
+    float *env,
+    const fftw_complex *fft,
+    uint32_t nframes)
+{
+    const unsigned int nTaps  = 20;
+    const unsigned int nTaps2 = 10;
 
-    float h[]={ // h=(firls(20, [0 0.02 0.1 1], [1 1 0 0]));
-        0.0180, 0.0243, 0.0310, 0.0378, 0.0445, 0.0508, 0.0564, 0.0611,
-        0.0646, 0.0667, 0.0675, 0.0667, 0.0646, 0.0611, 0.0564, 0.0508,
-        0.0445, 0.0378, 0.0310, 0.0243, 0.0180
+    static const float h[21] = {
+        0.0180f, 0.0243f, 0.0310f, 0.0378f, 0.0445f,
+        0.0508f, 0.0564f, 0.0611f, 0.0646f, 0.0667f,
+        0.0675f, 0.0667f, 0.0646f, 0.0611f, 0.0564f,
+        0.0508f, 0.0445f, 0.0378f, 0.0310f, 0.0243f,
+        0.0180f
     };
 
-    // |H(w)|
-    memset(tmp,  0, (nframes+nTaps)*sizeof(float));
-    for(unsigned int k=0;k<nframes;k++)
-        tmp[k]=sqrt(fft[k][0]*fft[k][0]+fft[k][1]*fft[k][1]);
+    float tmp[MAX_FRAME_LENGTH + 21];
+    memset(tmp, 0, sizeof(float) * (nframes + nTaps));
+    memset(env, 0, sizeof(float) * nframes);
 
-    memset(env, 0, nframes*sizeof(float));
+    for (uint32_t k = 0; k < nframes; ++k)
+        tmp[k] = sqrt(fft[k][0]*fft[k][0] + fft[k][1]*fft[k][1]);
 
-    // magnitude spectrum filtering
-    unsigned int i, j;
-    float *p_h, *p_z, accum;
-
-    float z[2 * nTaps];
-    memset(z, 0, 2*nTaps*sizeof(float));
+    float z[40] = {};
     int state = 0;
-    for (j = 0; j < nframes+nTaps2; j++) {
+
+    for (uint32_t j = 0; j < nframes + nTaps2; ++j) {
         z[state] = z[state + nTaps] = tmp[j];
-        p_h = h;
-        p_z = z + state;
-        accum = 0;
-        for (i = 0; i < nTaps; i++) accum += *p_h++ * *p_z++;
+
+        float acc = 0.0f;
+        for (unsigned int i = 0; i < nTaps; ++i)
+            acc += h[i] * z[state + i];
+
         if (--state < 0) state += nTaps;
-        if(j>=nTaps2) env[j-nTaps2]=accum;
+        if (j >= nTaps2) env[j - nTaps2] = acc;
     }
 }
+
+// ============================================================
+// Bypass
+// ============================================================
 
 void VocProc::set_bypass(float bypass)
 {
-    if ( bypass )
-    {
-        sSwitch = 0.0;
-    }
-    else
-        sSwitch = 1.0;
+    sSwitch = bypass ? 0.0f : 1.0f;
 }

@@ -24,58 +24,75 @@
 #ifndef DSP_HPP
 #define DSP_HPP
 
-#include <stdint.h>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <cmath>
+
 #include <fftw3.h>
 #include <pthread.h>
-#include <string.h>     // because of memset
-#include <stdlib.h>
-#include <math.h>
 
 class VocProc
 {
-    private:
-        float   fSamplingFreq;
-        float 	sPitchFactor, sEffect, sOutputGain;
-        float   cFormantVoco, cEffect;
-        float   powerIn;
-        float   sSwitch;
-        float   pOffset[2];
+public:
+    explicit VocProc(double rate);
+    ~VocProc();
 
-        float   cAutoTune;
+    void run(const float **inputs, float **outputs, uint32_t nframes);
+    void set_bypass(float bypass);
 
-        float   *gInFIFO, *gIn2FIFO, *gOutFIFO, *gOutputAccum;
-        float   *window;
+private:
+    // Parameters
+    float fSamplingFreq;
 
-        long    fftFrameSize, overlap;
+    float sPitchFactor;
+    float sEffect;
+    float sOutputGain;
+    float sSwitch;
 
-        float   freqOld;
+    float cFormantVoco;
+    float cEffect;
+    float cAutoTune;
 
-        double  *fftTmpR;
-        fftw_complex *fftTmpC;
-        fftw_complex *fftOldC;
-        fftw_complex *fftCeps;
-        fftw_plan fftPlan1;
-        fftw_plan fftPlan2;
-        fftw_plan fftPlanInv;
+    float powerIn;
 
-        void    spectralEnvelope(float *env, fftw_complex *fft, uint32_t nframes);
+    // FFT parameters
+    long fftFrameSize;
+    long overlap;
 
-        float   pitchFrequency(fftw_complex *block);
+    // Time-domain buffers
+    float *gInFIFO;
+    float *gIn2FIFO;
+    float *gOutFIFO;
+    float *gOutputAccum;
+    float *window;
 
-        void    phaseVocAnalysis(fftw_complex *block, float *gLastPhase, double freqPerBin, double expct, float *gAnaMagn, float *gAnaFreq);
-        void    phaseVocSynthesis(fftw_complex *block, float *gSumPhase, float *gSynMagn, float *gSynFreq, double freqPerBin, double expct);
+    // FFTW
+    double       *fftTmpR;
+    fftw_complex *fftTmpC;   // WORK BUFFER (modulator OR carrier)
+    fftw_complex *fftOldC;   // saved modulator spectrum
 
+    fftw_plan fftPlanFwd;
+    fftw_plan fftPlanInv;
 
+    // DSP helpers
+    void spectralEnvelope(float *env,
+                          const fftw_complex *fft,
+                          uint32_t nframes);
 
-    public:
+    void phaseVocAnalysis(fftw_complex *block,
+                          float *lastPhase,
+                          double freqPerBin,
+                          double expct,
+                          float *anaMagn,
+                          float *anaFreq);
 
-        VocProc(double rate);
-        ~VocProc();
-
-        void run(const float **inputs, float **outputs, uint32_t nframes);
-        void set_bypass(float bypass);
+    void phaseVocSynthesis(fftw_complex *block,
+                           float *sumPhase,
+                           const float *synMagn,
+                           const float *synFreq,
+                           double freqPerBin,
+                           double expct);
 };
 
-
-#endif /* DSP_HPP */
-
+#endif // DSP_HPP
