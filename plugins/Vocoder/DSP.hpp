@@ -46,6 +46,7 @@ public:
 
     void run(const float **inputs, float **outputs, uint32_t nframes);
     void set_bypass(float bypass);
+    void resetDSPState();
     inline float noise();
 
 private:
@@ -55,7 +56,8 @@ private:
     float sPitchFactor;
     float sEffect;
     float sOutputGain;
-    float sSwitch;
+    bool  bypassed;
+    bool  bypassedPrev;
 
     float cFormantVoco;
     float cEffect;

@@ -44,7 +44,8 @@ VocProc::VocProc(double rate)
     sPitchFactor = 1.0f;
     sEffect      = 0.0f;
     sOutputGain  = 1.0f;
-    sSwitch      = 1.0f;
+    bypassed     = false;
+    bypassedPrev = false;
 
     cFormantVoco = 1.0f;
     cEffect      = 0.0f;
@@ -130,6 +131,18 @@ VocProc::~VocProc()
 
 void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
 {
+    if (bypassed && !bypassedPrev) {
+        // Entering bypass: reset DSP so it doesn't run silently
+        resetDSPState();
+    }
+
+    if (!bypassed && bypassedPrev) {
+        // Leaving bypass: clean DSP restart
+        resetDSPState();
+    }
+
+    bypassedPrev = bypassed;
+
     const float *inputMod = inputs[0];
     const float *inputCar = inputs[1];
     float *output = outputs[0];
@@ -149,6 +162,11 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
     }
 
     for (uint32_t i = 0; i < nframes; ++i) {
+
+        if (bypassed) {
+            output[i] = inputMod[i];
+            continue;
+        }
 
         gInFIFO [gRover] = inputMod[i];
         gIn2FIFO[gRover] = inputCar[i];
@@ -205,19 +223,17 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
         );
 
         // ================= Carrier FFT =================
-        if (sSwitch) {
-            for (long k = 0; k < fftFrameSize; ++k)
-                fftTmpR[k] = gIn2FIFO[k] * window[k];
+        for (long k = 0; k < fftFrameSize; ++k)
+            fftTmpR[k] = gIn2FIFO[k] * window[k];
 
 #ifdef KISSFFT_SUPPORT
-            kiss_fftr(fftPlanFwd, fftTmpR, fftTmpC);
+        kiss_fftr(fftPlanFwd, fftTmpR, fftTmpC);
 #else
-            fftw_execute(fftPlanFwd);
+        fftw_execute(fftPlanFwd);
 #endif
-        }
 
         // ================= Envelope Transfer =================
-        if (cFormantVoco && sSwitch) {
+        if (cFormantVoco) {
             float envMod[MAX_FRAME_LENGTH/2];
             float envCar[MAX_FRAME_LENGTH/2];
 
@@ -393,7 +409,20 @@ void VocProc::spectralEnvelope(
 
 void VocProc::set_bypass(float bypass)
 {
-    sSwitch = bypass ? 0.0f : 1.0f;
+    bypassed = (bypass > 0.5f);
+}
+
+void VocProc::resetDSPState()
+{
+    memset(gInFIFO,  0, sizeof(float) * fftFrameSize);
+    memset(gIn2FIFO, 0, sizeof(float) * fftFrameSize);
+    memset(gOutFIFO, 0, sizeof(float) * fftFrameSize);
+    memset(gOutputAccum, 0, sizeof(float) * 2 * fftFrameSize);
+
+    memset(gLastPhase, 0, sizeof(gLastPhase));
+    memset(gSumPhase,  0, sizeof(gSumPhase));
+
+    gRover = fftFrameSize - (fftFrameSize / overlap);
 }
 
 inline float 
