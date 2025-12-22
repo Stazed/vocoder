@@ -76,6 +76,7 @@ VocProc::VocProc(double rate)
 
     gRover = 0;
     gInit  = false;
+    rngState = 0x12345678u ^ (uintptr_t)this;
 
 #ifdef KISSFFT_SUPPORT
     fftTmpR = (float*)malloc(sizeof(float) * fftFrameSize);
@@ -193,8 +194,7 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
                 gSynMagn[idx] += gAnaMagn[k];
                 gSynFreq[idx]  = gAnaFreq[k] * sPitchFactor;
                 if (cEffect)
-                    gSynFreq[idx] +=
-                        sEffect * (200.0f * rand() / RAND_MAX - 100.0f);
+                    gSynFreq[idx] += sEffect * 100.0f * noise();
             }
         }
 
@@ -394,4 +394,13 @@ void VocProc::spectralEnvelope(
 void VocProc::set_bypass(float bypass)
 {
     sSwitch = bypass ? 0.0f : 1.0f;
+}
+
+inline float 
+VocProc::noise()
+{
+    rngState ^= rngState << 13;
+    rngState ^= rngState >> 17;
+    rngState ^= rngState << 5;
+    return (rngState * (1.0f / UINT32_MAX)) * 2.0f - 1.0f;
 }

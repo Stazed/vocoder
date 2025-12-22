@@ -46,6 +46,7 @@ public:
 
     void run(const float **inputs, float **outputs, uint32_t nframes);
     void set_bypass(float bypass);
+    inline float noise();
 
 private:
     // Parameters
@@ -82,6 +83,7 @@ private:
 
     long gRover;
     bool gInit;
+    uint32_t rngState;
 
 #ifdef KISSFFT_SUPPORT
     typedef kiss_fft_cpx fft_complex_t;
