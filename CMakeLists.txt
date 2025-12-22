@@ -18,10 +18,6 @@ if(THREADS_HAVE_PTHREAD_ARG)
   set_property(TARGET Vocoder PROPERTY INTERFACE_COMPILE_OPTIONS "-pthread")
 endif()
 
-set(ExternLibraries
-    fftw3
-)
-
 set(CMAKE_BUILD_TYPE "Release")
 
 set (BuildOptionsBasic
