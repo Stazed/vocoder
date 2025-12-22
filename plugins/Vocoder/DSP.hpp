@@ -29,8 +29,12 @@
 #include <cstring>
 #include <cmath>
 
-#include <fftw3.h>
-#include <pthread.h>
+#ifdef KISSFFT_SUPPORT
+    #include <kissfft/kiss_fftr.h>
+#else
+    #include <fftw3.h>
+    #include <pthread.h>
+#endif
 
 class VocProc
 {
@@ -67,27 +71,38 @@ private:
     float *gOutputAccum;
     float *window;
 
-    // FFTW
-    double       *fftTmpR;
-    fftw_complex *fftTmpC;   // WORK BUFFER (modulator OR carrier)
-    fftw_complex *fftOldC;   // saved modulator spectrum
-
+#ifdef KISSFFT_SUPPORT
+    typedef kiss_fft_cpx fft_complex_t;
+    kiss_fftr_cfg fftPlanFwd;
+    kiss_fftr_cfg fftPlanInv;
+#else
+    typedef fftw_complex fft_complex_t;
     fftw_plan fftPlanFwd;
     fftw_plan fftPlanInv;
+#endif
+
+    // FFT buffers
+#ifdef KISSFFT_SUPPORT
+    float         *fftTmpR;
+#else
+    double        *fftTmpR;
+#endif
+    fft_complex_t *fftTmpC;
+    fft_complex_t *fftOldC;
 
     // DSP helpers
     void spectralEnvelope(float *env,
-                          const fftw_complex *fft,
+                          const fft_complex_t *fft,
                           uint32_t nframes);
 
-    void phaseVocAnalysis(fftw_complex *block,
+    void phaseVocAnalysis(fft_complex_t *block,
                           float *lastPhase,
                           double freqPerBin,
                           double expct,
                           float *anaMagn,
                           float *anaFreq);
 
-    void phaseVocSynthesis(fftw_complex *block,
+    void phaseVocSynthesis(fft_complex_t *block,
                            float *sumPhase,
                            const float *synMagn,
                            const float *synFreq,

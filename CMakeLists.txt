@@ -7,6 +7,7 @@ project (Vocoder)
 set (PACKAGE_VERSION "1.0.0")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
+option (UseKISSfft "Use the KISSfft library instead of fftw" OFF)
 
 SET (PluginLibDir "lib" CACHE STRING
     "Install directory for plugin libraries PREFIX/PLUGIN_LIB_DIR/{lv2,clap}")
@@ -32,6 +33,22 @@ set (BuildOptionsDebug
     "-std=c++11 -Wno-cast-function-type -O0 -g3 -ggdb -Wall -Wextra -Wpointer-arith"
     CACHE STRING "Debug build flags"
 )
+
+if (UseKISSfft)
+    find_package(kissfft CONFIG REQUIRED COMPONENTS STATIC)
+    if(TARGET kissfft::kissfft)   # Modern cmake
+        message(STATUS "Have kissfft::kissfft TARGET")
+    endif()
+    message(STATUS "Using KISSfft library")
+    add_definitions(-D'KISSFFT_SUPPORT=1')
+    set(ExternLibraries
+        libkissfft-float.a
+    )
+else (UseKISSfft)
+    set(ExternLibraries
+        fftw3
+    )
+endif (UseKISSfft)
 
 if (BuildForDebug)
     set (CMAKE_BUILD_TYPE "Debug")
