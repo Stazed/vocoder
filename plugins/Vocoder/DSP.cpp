@@ -164,7 +164,11 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
     for (uint32_t i = 0; i < nframes; ++i) {
 
         if (bypassed) {
+#ifdef USE_CARRIER_ON_BYPASS
+            output[i] = inputCar[i];
+#else
             output[i] = inputMod[i];
+#endif
             continue;
         }
 

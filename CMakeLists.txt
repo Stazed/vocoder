@@ -8,6 +8,7 @@ set (PACKAGE_VERSION "1.0.0")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
 option (UseKISSfft "Use the KISSfft library instead of fftw" OFF)
+option (UseCarrierBypass "Use the carrier as pass through on bypass (default voice)" OFF)
 
 SET (PluginLibDir "lib" CACHE STRING
     "Install directory for plugin libraries PREFIX/PLUGIN_LIB_DIR/{lv2,clap}")
@@ -29,6 +30,11 @@ set (BuildOptionsDebug
     "-std=c++11 -Wno-cast-function-type -O0 -g3 -ggdb -Wall -Wextra -Wpointer-arith"
     CACHE STRING "Debug build flags"
 )
+
+if (UseCarrierBypass)
+    message(STATUS "Using carrier on plugin bypass")
+    add_definitions(-D'USE_CARRIER_ON_BYPASS=1')
+endif (UseCarrierBypass)
 
 if (UseKISSfft)
     find_package(kissfft CONFIG REQUIRED COMPONENTS STATIC)
