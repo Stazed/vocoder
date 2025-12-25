@@ -47,6 +47,8 @@ if (UseKISSfft)
         libkissfft-float.a
     )
 else (UseKISSfft)
+    find_package (PkgConfig REQUIRED)
+    pkg_check_modules(FFTW3 REQUIRED fftw3>=0.22 fftw3f>=0.22)
     set(ExternLibraries
         fftw3
     )
