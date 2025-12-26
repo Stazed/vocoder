@@ -9,6 +9,11 @@ set (PACKAGE_VERSION "1.1.0")
 option (BuildForDebug "Include gdb debugging support" OFF)
 option (UseKISSfft "Use the KISSfft library instead of fftw" OFF)
 option (UseCarrierBypass "Use the carrier as pass through on bypass (default voice)" OFF)
+option (BuildLADSPA "Build LADSPA version" ON)
+option (BuildLV2 "Build LV2 version" ON)
+option (BuildCLAP "Build CLAP version" ON)
+option (BuildVST "Build VST(2) version" ON)
+option (BuildVST_3 "Build VST3 version" ON)
 
 SET (PluginLibDir "lib" CACHE STRING
     "Install directory for plugin libraries PREFIX/PLUGIN_LIB_DIR/{lv2,clap}")
