@@ -12,8 +12,8 @@ option (UseCarrierBypass "Use the carrier as pass through on bypass (default voi
 option (BuildLADSPA "Build LADSPA version" ON)
 option (BuildLV2 "Build LV2 version" ON)
 option (BuildCLAP "Build CLAP version" ON)
-option (BuildVST "Build VST(2) version" ON)
-option (BuildVST_3 "Build VST3 version" ON)
+option (BuildVST2 "Build VST(2) version" OFF)
+option (BuildVST3 "Build VST3 version" OFF)
 
 SET (PluginLibDir "lib" CACHE STRING
     "Install directory for plugin libraries PREFIX/PLUGIN_LIB_DIR/{lv2,clap}")
