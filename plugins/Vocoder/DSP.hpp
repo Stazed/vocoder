@@ -46,8 +46,6 @@ public:
 
     void run(const float **inputs, float **outputs, uint32_t nframes);
     void set_bypass(float bypass);
-    void resetDSPState();
-    inline float noise();
 
 private:
     // Parameters
@@ -124,6 +122,8 @@ private:
                            const float *synFreq,
                            double freqPerBin,
                            double expct);
+    void resetDSPState();
+    inline float noise();
 };
 
 #endif // DSP_HPP
