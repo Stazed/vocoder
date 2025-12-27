@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.5.1...3.31.1)
 
 project (Vocoder)
 
-set (PACKAGE_VERSION "1.1.0")
+set (PACKAGE_VERSION "1.1.1")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
 option (UseKISSfft "Use the KISSfft library instead of fftw" OFF)
