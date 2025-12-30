@@ -29,8 +29,22 @@
 
 #define M_2PI 6.283185307179586
 
+#ifndef PFFFT_SUPPORT
 #ifndef KISSFFT_SUPPORT
 static pthread_mutex_t fftw_planner_lock = PTHREAD_MUTEX_INITIALIZER;
+#endif
+#endif
+
+// ---------------- FFT helpers ----------------
+#ifdef PFFFT_SUPPORT
+    #define FFT_REAL(buf,k) buf[2*(k)]
+    #define FFT_IMAG(buf,k) buf[2*(k)+1]
+#elif defined(KISSFFT_SUPPORT)
+    #define FFT_REAL(buf,k) buf[k].r
+    #define FFT_IMAG(buf,k) buf[k].i
+#else
+    #define FFT_REAL(buf,k) buf[k][0]
+    #define FFT_IMAG(buf,k) buf[k][1]
 #endif
 
 // ============================================================
@@ -79,20 +93,23 @@ VocProc::VocProc(double rate)
     gInit  = false;
     rngState = 0x12345678u ^ (uintptr_t)this;
 
-#ifdef KISSFFT_SUPPORT
+#ifdef PFFFT_SUPPORT
+    fftSetup = pffft_new_setup(fftFrameSize, PFFFT_REAL);
+    fftTmpR  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
+    fftTmpC  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
+    fftOldC  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
+#elif defined(KISSFFT_SUPPORT)
     fftTmpR = (float*)malloc(sizeof(float) * fftFrameSize);
-#else
-    fftTmpR = (double*)malloc(sizeof(double) * fftFrameSize);
-#endif
-    fftTmpC = (fft_complex_t*)malloc(
-        sizeof(fft_complex_t) * (fftFrameSize / 2 + 1));
-    fftOldC = (fft_complex_t*)malloc(
-        sizeof(fft_complex_t) * (fftFrameSize / 2 + 1));
+    fftTmpC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
+    fftOldC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
 
-#ifdef KISSFFT_SUPPORT
     fftPlanFwd = kiss_fftr_alloc(fftFrameSize, 0, nullptr, nullptr);
     fftPlanInv = kiss_fftr_alloc(fftFrameSize, 1, nullptr, nullptr);
 #else
+    fftTmpR = (double*)malloc(sizeof(double) * fftFrameSize);
+    fftTmpC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
+    fftOldC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
+
     pthread_mutex_lock(&fftw_planner_lock);
     fftPlanFwd = fftw_plan_dft_r2c_1d(
         fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
@@ -104,14 +121,25 @@ VocProc::VocProc(double rate)
 
 VocProc::~VocProc()
 {
-#ifdef KISSFFT_SUPPORT
+#ifdef PFFFT_SUPPORT
+    pffft_destroy_setup(fftSetup);
+    pffft_aligned_free(fftTmpR);
+    pffft_aligned_free(fftTmpC);
+    pffft_aligned_free(fftOldC);
+#elif defined(KISSFFT_SUPPORT)
     free(fftPlanFwd);
     free(fftPlanInv);
+    free(fftTmpR);
+    free(fftTmpC);
+    free(fftOldC);
 #else
     pthread_mutex_lock(&fftw_planner_lock);
     fftw_destroy_plan(fftPlanFwd);
     fftw_destroy_plan(fftPlanInv);
     pthread_mutex_unlock(&fftw_planner_lock);
+    free(fftTmpR);
+    free(fftTmpC);
+    free(fftOldC);
 #endif
 
     free(window);
@@ -119,10 +147,6 @@ VocProc::~VocProc()
     free(gIn2FIFO);
     free(gOutFIFO);
     free(gOutputAccum);
-
-    free(fftTmpR);
-    free(fftTmpC);
-    free(fftOldC);
 }
 
 // ============================================================
@@ -162,7 +186,6 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
     }
 
     for (uint32_t i = 0; i < nframes; ++i) {
-
         if (bypassed) {
 #ifdef USE_CARRIER_ON_BYPASS
             output[i] = inputCar[i];
@@ -191,14 +214,19 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
         }
         powerIn = (float)(pwr / fftFrameSize);
 
-#ifdef KISSFFT_SUPPORT
+#ifdef PFFFT_SUPPORT
+        pffft_transform_ordered(fftSetup, fftTmpR, fftTmpC, nullptr, PFFFT_FORWARD);
+#elif defined(KISSFFT_SUPPORT)
         kiss_fftr(fftPlanFwd, fftTmpR, fftTmpC);
 #else
         fftw_execute(fftPlanFwd);
 #endif
 
-        memcpy(fftOldC, fftTmpC,
-               sizeof(fft_complex_t) * (fftFrameSize2 + 1));
+#ifdef PFFFT_SUPPORT
+        memcpy(fftOldC, fftTmpC, sizeof(float) * fftFrameSize);
+#else
+        memcpy(fftOldC, fftTmpC, sizeof(fft_complex_t) * (fftFrameSize2 + 1));
+#endif
 
         // ================= Phase Vocoder =================
         phaseVocAnalysis(
@@ -230,7 +258,9 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
         for (long k = 0; k < fftFrameSize; ++k)
             fftTmpR[k] = gIn2FIFO[k] * window[k];
 
-#ifdef KISSFFT_SUPPORT
+#ifdef PFFFT_SUPPORT
+        pffft_transform_ordered(fftSetup, fftTmpR, fftTmpC, nullptr, PFFFT_FORWARD);
+#elif defined(KISSFFT_SUPPORT)
         kiss_fftr(fftPlanFwd, fftTmpR, fftTmpC);
 #else
         fftw_execute(fftPlanFwd);
@@ -246,18 +276,15 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
 
             for (long k = 0; k < fftFrameSize2; ++k) {
                 float coef = envMod[k] / (envCar[k] + 0.02f) * 2.0f;
-#ifdef KISSFFT_SUPPORT
-                fftTmpC[k].r *= coef;
-                fftTmpC[k].i *= coef;
-#else
-                fftTmpC[k][0] *= coef;
-                fftTmpC[k][1] *= coef;
-#endif
+                FFT_REAL(fftTmpC,k) *= coef;
+                FFT_IMAG(fftTmpC,k) *= coef;
             }
         }
 
         // ================= IFFT + OLA =================
-#ifdef KISSFFT_SUPPORT
+#ifdef PFFFT_SUPPORT
+        pffft_transform_ordered(fftSetup, fftTmpC, fftTmpR, nullptr, PFFFT_BACKWARD);
+#elif defined(KISSFFT_SUPPORT)
         kiss_fftri(fftPlanInv, fftTmpC, fftTmpR);
 #else
         fftw_execute(fftPlanInv);
@@ -299,13 +326,9 @@ void VocProc::phaseVocAnalysis(
     float *anaFreq)
 {
     for (long k = 0; k <= fftFrameSize / 2; ++k) {
-#ifdef KISSFFT_SUPPORT
-        double real = block[k].r;
-        double imag = block[k].i;
-#else
-        double real = block[k][0];
-        double imag = block[k][1];
-#endif
+        double real = FFT_REAL(block,k);
+        double imag = FFT_IMAG(block,k);
+
         double magn = 2.0 * sqrt(real*real + imag*imag);
         double phase = atan2(imag, real);
 
@@ -340,7 +363,6 @@ void VocProc::phaseVocSynthesis(
     double expct)
 {
     for (long k = 0; k <= fftFrameSize / 2; ++k) {
-
         double magn = synMagn[k];
         double tmp  = synFreq[k] - k * freqPerBin;
 
@@ -349,13 +371,8 @@ void VocProc::phaseVocSynthesis(
         tmp += k * expct;
 
         sumPhase[k] += (float)tmp;
-#ifdef KISSFFT_SUPPORT
-        block[k].r = magn * cos(sumPhase[k]);
-        block[k].i = magn * sin(sumPhase[k]);
-#else
-        block[k][0] = magn * cos(sumPhase[k]);
-        block[k][1] = magn * sin(sumPhase[k]);
-#endif
+        FFT_REAL(block,k) = magn * cos(sumPhase[k]);
+        FFT_IMAG(block,k) = magn * sin(sumPhase[k]);
     }
 }
 
@@ -384,13 +401,7 @@ void VocProc::spectralEnvelope(
     memset(env, 0, sizeof(float) * nframes);
 
     for (uint32_t k = 0; k < nframes; ++k)
-    {
-#ifdef KISSFFT_SUPPORT
-        tmp[k] = sqrt(fft[k].r*fft[k].r + fft[k].i*fft[k].i);
-#else
-        tmp[k] = sqrt(fft[k][0]*fft[k][0] + fft[k][1]*fft[k][1]);
-#endif
-    }
+        tmp[k] = sqrt(FFT_REAL(fft,k)*FFT_REAL(fft,k) + FFT_IMAG(fft,k)*FFT_IMAG(fft,k));
 
     float z[40] = {};
     int state = 0;
@@ -413,24 +424,30 @@ void VocProc::spectralEnvelope(
 
 void VocProc::set_bypass(float bypass)
 {
-    bypassed = (bypass > 0.5f);
+    bypassed = bypass > 0.5f;
 }
+
+// ============================================================
+// Reset
+// ============================================================
 
 void VocProc::resetDSPState()
 {
-    memset(gInFIFO,  0, sizeof(float) * fftFrameSize);
-    memset(gIn2FIFO, 0, sizeof(float) * fftFrameSize);
-    memset(gOutFIFO, 0, sizeof(float) * fftFrameSize);
-    memset(gOutputAccum, 0, sizeof(float) * 2 * fftFrameSize);
-
+    gRover = fftFrameSize / overlap;
+    gInit  = false;
     memset(gLastPhase, 0, sizeof(gLastPhase));
-    memset(gSumPhase,  0, sizeof(gSumPhase));
-
-    gRover = fftFrameSize - (fftFrameSize / overlap);
+    memset(gSumPhase, 0, sizeof(gSumPhase));
+    memset(gInFIFO, 0, sizeof(float)*fftFrameSize);
+    memset(gIn2FIFO, 0, sizeof(float)*fftFrameSize);
+    memset(gOutFIFO, 0, sizeof(float)*fftFrameSize);
+    memset(gOutputAccum, 0, sizeof(float)*2*fftFrameSize);
 }
 
-inline float 
-VocProc::noise()
+// ============================================================
+// Noise Helper
+// ============================================================
+
+inline float VocProc::noise()
 {
     rngState ^= rngState << 13;
     rngState ^= rngState >> 17;

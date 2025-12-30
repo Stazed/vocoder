@@ -29,7 +29,9 @@
 #include <cstring>
 #include <cmath>
 
-#ifdef KISSFFT_SUPPORT
+#ifdef PFFFT_SUPPORT
+    #include <pffft/pffft.h>
+#elif defined(KISSFFT_SUPPORT)
     #include <kissfft/kiss_fftr.h>
 #else
     #include <fftw3.h>
@@ -85,24 +87,27 @@ private:
     bool gInit;
     uint32_t rngState;
 
-#ifdef KISSFFT_SUPPORT
+#ifdef PFFFT_SUPPORT
+    typedef float fft_complex_t; // interleaved real/imag
+    PFFFT_Setup* fftSetup;
+    float *fftTmpR;
+    float *fftTmpC;   // interleaved complex
+    float *fftOldC;
+#elif defined(KISSFFT_SUPPORT)
     typedef kiss_fft_cpx fft_complex_t;
     kiss_fftr_cfg fftPlanFwd;
     kiss_fftr_cfg fftPlanInv;
+    float         *fftTmpR;
+    fft_complex_t *fftTmpC;
+    fft_complex_t *fftOldC;
 #else
     typedef fftw_complex fft_complex_t;
     fftw_plan fftPlanFwd;
     fftw_plan fftPlanInv;
-#endif
-
-    // FFT buffers
-#ifdef KISSFFT_SUPPORT
-    float         *fftTmpR;
-#else
     double        *fftTmpR;
-#endif
     fft_complex_t *fftTmpC;
     fft_complex_t *fftOldC;
+#endif
 
     // DSP helpers
     void spectralEnvelope(float *env,
