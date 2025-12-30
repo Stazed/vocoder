@@ -30,18 +30,13 @@
 #define M_2PI 6.283185307179586
 
 #ifndef PFFFT_SUPPORT
-#ifndef KISSFFT_SUPPORT
 static pthread_mutex_t fftw_planner_lock = PTHREAD_MUTEX_INITIALIZER;
-#endif
 #endif
 
 // ---------------- FFT helpers ----------------
 #ifdef PFFFT_SUPPORT
     #define FFT_REAL(buf,k) buf[2*(k)]
     #define FFT_IMAG(buf,k) buf[2*(k)+1]
-#elif defined(KISSFFT_SUPPORT)
-    #define FFT_REAL(buf,k) buf[k].r
-    #define FFT_IMAG(buf,k) buf[k].i
 #else
     #define FFT_REAL(buf,k) buf[k][0]
     #define FFT_IMAG(buf,k) buf[k][1]
@@ -98,13 +93,6 @@ VocProc::VocProc(double rate)
     fftTmpR  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
     fftTmpC  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
     fftOldC  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
-#elif defined(KISSFFT_SUPPORT)
-    fftTmpR = (float*)malloc(sizeof(float) * fftFrameSize);
-    fftTmpC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
-    fftOldC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
-
-    fftPlanFwd = kiss_fftr_alloc(fftFrameSize, 0, nullptr, nullptr);
-    fftPlanInv = kiss_fftr_alloc(fftFrameSize, 1, nullptr, nullptr);
 #else
     fftTmpR = (double*)malloc(sizeof(double) * fftFrameSize);
     fftTmpC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
@@ -126,12 +114,6 @@ VocProc::~VocProc()
     pffft_aligned_free(fftTmpR);
     pffft_aligned_free(fftTmpC);
     pffft_aligned_free(fftOldC);
-#elif defined(KISSFFT_SUPPORT)
-    free(fftPlanFwd);
-    free(fftPlanInv);
-    free(fftTmpR);
-    free(fftTmpC);
-    free(fftOldC);
 #else
     pthread_mutex_lock(&fftw_planner_lock);
     fftw_destroy_plan(fftPlanFwd);
@@ -216,8 +198,6 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
 
 #ifdef PFFFT_SUPPORT
         pffft_transform_ordered(fftSetup, fftTmpR, fftTmpC, nullptr, PFFFT_FORWARD);
-#elif defined(KISSFFT_SUPPORT)
-        kiss_fftr(fftPlanFwd, fftTmpR, fftTmpC);
 #else
         fftw_execute(fftPlanFwd);
 #endif
@@ -260,8 +240,6 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
 
 #ifdef PFFFT_SUPPORT
         pffft_transform_ordered(fftSetup, fftTmpR, fftTmpC, nullptr, PFFFT_FORWARD);
-#elif defined(KISSFFT_SUPPORT)
-        kiss_fftr(fftPlanFwd, fftTmpR, fftTmpC);
 #else
         fftw_execute(fftPlanFwd);
 #endif
@@ -284,8 +262,6 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
         // ================= IFFT + OLA =================
 #ifdef PFFFT_SUPPORT
         pffft_transform_ordered(fftSetup, fftTmpC, fftTmpR, nullptr, PFFFT_BACKWARD);
-#elif defined(KISSFFT_SUPPORT)
-        kiss_fftri(fftPlanInv, fftTmpC, fftTmpR);
 #else
         fftw_execute(fftPlanInv);
 #endif

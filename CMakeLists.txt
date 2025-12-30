@@ -8,7 +8,6 @@ set (PACKAGE_VERSION "1.1.1")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
 option (UsePFFFT "Use the PFFFT library instead of fftw or KISSfft" ON)
-option (UseKISSfft "Use the KISSfft library instead of fftw" OFF)
 option (UseCarrierBypass "Use the carrier as pass through on bypass (default voice)" OFF)
 option (BuildLADSPA "Build LADSPA version" ON)
 option (BuildLV2 "Build LV2 version" ON)
@@ -46,32 +45,22 @@ if (UsePFFFT)
     message(STATUS "Using PFFFT library")
     add_definitions(-D'PFFFT_SUPPORT=1')
 else (UsePFFFT)
-if (UseKISSfft)
-    find_package(kissfft CONFIG REQUIRED COMPONENTS STATIC)
-    if(TARGET kissfft::kissfft)   # Modern cmake
-        message(STATUS "Have kissfft::kissfft TARGET")
-    endif()
-    message(STATUS "Using KISSfft library")
-    add_definitions(-D'KISSFFT_SUPPORT=1')
-    set(ExternLibraries
-        libkissfft-float.a
-    )
-else (UseKISSfft)
     find_package (PkgConfig REQUIRED)
     pkg_check_modules(FFTW3 REQUIRED fftw3>=0.22 fftw3f>=0.22)
     message(STATUS "Using FFTW3 library")
     set(ExternLibraries
         fftw3
     )
-endif (UseKISSfft)
 endif (UsePFFFT)
 
 if (BuildForDebug)
     set (CMAKE_BUILD_TYPE "Debug")
     set (CMAKE_CXX_FLAGS_DEBUG ${BuildOptionsDebug})
+    message(STATUS "Building For Debug")
 else(BuildForDebug)
     set(CMAKE_BUILD_TYPE "Release")
     set (CMAKE_CXX_FLAGS_RELEASE ${BuildOptionsBasic})
+    message(STATUS "Building For Release")
 endif(BuildForDebug)
 
 add_subdirectory(plugins/Vocoder)

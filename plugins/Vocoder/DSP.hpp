@@ -31,8 +31,6 @@
 
 #ifdef PFFFT_SUPPORT
     #include <pffft/pffft.h>
-#elif defined(KISSFFT_SUPPORT)
-    #include <kissfft/kiss_fftr.h>
 #else
     #include <fftw3.h>
     #include <pthread.h>
@@ -93,13 +91,6 @@ private:
     float *fftTmpR;
     float *fftTmpC;   // interleaved complex
     float *fftOldC;
-#elif defined(KISSFFT_SUPPORT)
-    typedef kiss_fft_cpx fft_complex_t;
-    kiss_fftr_cfg fftPlanFwd;
-    kiss_fftr_cfg fftPlanInv;
-    float         *fftTmpR;
-    fft_complex_t *fftTmpC;
-    fft_complex_t *fftOldC;
 #else
     typedef fftw_complex fft_complex_t;
     fftw_plan fftPlanFwd;
