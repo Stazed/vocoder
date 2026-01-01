@@ -60,10 +60,4 @@ To disable:
 By default the Bypass will pass through the voice (modulator). You can build with -DUseCarrierBypass=ON if you prefer
 the bypass use the carrier.
 
-The default build uses the fftw library. You can build using the KissFFT library using -DUseKISSfft=ON.
-The KissFFT library must be built statically with the -fPIC flag. This fork of the KissFFT library has 
-the build options already set for use with this project:
-
-```bash
-    git clone https://github.com/Stazed/kissfft.git
-```
+The default build uses the PFFFT library. You can build using the FFTW library using -DUsePFFFT=OFF.
