@@ -7,7 +7,7 @@ project (Vocoder)
 set (PACKAGE_VERSION "1.1.1")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
-option (UsePFFFT "Use the PFFFT library instead of fftw or KISSfft" ON)
+option (UsePFFFT "Use the PFFFT library instead of FFTW" ON)
 option (UseCarrierBypass "Use the carrier as pass through on bypass (default voice)" OFF)
 option (BuildLADSPA "Build LADSPA version" ON)
 option (BuildLV2 "Build LV2 version" ON)

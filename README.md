@@ -14,7 +14,7 @@ Building
 
 Dependencies:
   -  pthread
-  -  fftw3
+  -  fftw3  (Optional FFTW build)
 
 For cmake build:
 
