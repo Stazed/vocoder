@@ -27,12 +27,12 @@ endif()
 set(CMAKE_BUILD_TYPE "Release")
 
 set (BuildOptionsBasic
-    "-Wno-unused-parameter -O3 -fvisibility=hidden"
+    "-std=c++14 -Wno-unused-parameter -O3 -fvisibility=hidden"
     CACHE STRING "basic X86 complier options"
 )
 
 set (BuildOptionsDebug
-    "-std=c++11 -Wno-cast-function-type -O0 -g3 -ggdb -Wall -Wextra -Wpointer-arith"
+    "-std=c++14 -Wno-cast-function-type -O0 -g3 -ggdb -Wall -Wextra -Wpointer-arith"
     CACHE STRING "Debug build flags"
 )
 
