@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.5.1...3.31.1)
 
 project (Vocoder)
 
-set (PACKAGE_VERSION "1.1.1")
+set (PACKAGE_VERSION "1.1.2")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
 option (UsePFFFT "Use the PFFFT library instead of FFTW" ON)
