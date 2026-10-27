@@ -3,6 +3,7 @@
     singing voice
 
     (c) Igor Brkic 2010
+    (c) Stazed  2023 -
 
     Phase vocoder code adapted from:
     http://www.dspdimension.com/admin/pitch-shifting-using-the-ft/
