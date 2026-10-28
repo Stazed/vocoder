@@ -30,18 +30,10 @@
 
 #define M_2PI 6.283185307179586
 
-#ifndef PFFFT_SUPPORT
-static pthread_mutex_t fftw_planner_lock = PTHREAD_MUTEX_INITIALIZER;
-#endif
 
 // ---------------- FFT helpers ----------------
-#ifdef PFFFT_SUPPORT
     #define FFT_REAL(buf,k) buf[2*(k)]
     #define FFT_IMAG(buf,k) buf[2*(k)+1]
-#else
-    #define FFT_REAL(buf,k) buf[k][0]
-    #define FFT_IMAG(buf,k) buf[k][1]
-#endif
 
 // ============================================================
 // Constructor / Destructor
@@ -89,41 +81,18 @@ VocProc::VocProc(double rate)
     gInit  = false;
     rngState = 0x12345678u ^ (uintptr_t)this;
 
-#ifdef PFFFT_SUPPORT
     fftSetup = pffft_new_setup(fftFrameSize, PFFFT_REAL);
     fftTmpR  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
     fftTmpC  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
     fftOldC  = (float*)pffft_aligned_malloc(sizeof(float) * fftFrameSize);
-#else
-    fftTmpR = (double*)malloc(sizeof(double) * fftFrameSize);
-    fftTmpC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
-    fftOldC = (fft_complex_t*)malloc(sizeof(fft_complex_t) * (fftFrameSize/2+1));
-
-    pthread_mutex_lock(&fftw_planner_lock);
-    fftPlanFwd = fftw_plan_dft_r2c_1d(
-        fftFrameSize, fftTmpR, fftTmpC, FFTW_ESTIMATE);
-    fftPlanInv = fftw_plan_dft_c2r_1d(
-        fftFrameSize, fftTmpC, fftTmpR, FFTW_ESTIMATE);
-    pthread_mutex_unlock(&fftw_planner_lock);
-#endif
 }
 
 VocProc::~VocProc()
 {
-#ifdef PFFFT_SUPPORT
     pffft_destroy_setup(fftSetup);
     pffft_aligned_free(fftTmpR);
     pffft_aligned_free(fftTmpC);
     pffft_aligned_free(fftOldC);
-#else
-    pthread_mutex_lock(&fftw_planner_lock);
-    fftw_destroy_plan(fftPlanFwd);
-    fftw_destroy_plan(fftPlanInv);
-    pthread_mutex_unlock(&fftw_planner_lock);
-    free(fftTmpR);
-    free(fftTmpC);
-    free(fftOldC);
-#endif
 
     free(window);
     free(gInFIFO);
@@ -197,17 +166,8 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
         }
         powerIn = (float)(pwr / fftFrameSize);
 
-#ifdef PFFFT_SUPPORT
         pffft_transform_ordered(fftSetup, fftTmpR, fftTmpC, nullptr, PFFFT_FORWARD);
-#else
-        fftw_execute(fftPlanFwd);
-#endif
-
-#ifdef PFFFT_SUPPORT
         memcpy(fftOldC, fftTmpC, sizeof(float) * fftFrameSize);
-#else
-        memcpy(fftOldC, fftTmpC, sizeof(fft_complex_t) * (fftFrameSize2 + 1));
-#endif
 
         // ================= Phase Vocoder =================
         phaseVocAnalysis(
@@ -239,11 +199,7 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
         for (long k = 0; k < fftFrameSize; ++k)
             fftTmpR[k] = gIn2FIFO[k] * window[k];
 
-#ifdef PFFFT_SUPPORT
         pffft_transform_ordered(fftSetup, fftTmpR, fftTmpC, nullptr, PFFFT_FORWARD);
-#else
-        fftw_execute(fftPlanFwd);
-#endif
 
         // ================= Envelope Transfer =================
         if (cFormantVoco) {
@@ -261,11 +217,7 @@ void VocProc::run(const float **inputs, float **outputs, uint32_t nframes)
         }
 
         // ================= IFFT + OLA =================
-#ifdef PFFFT_SUPPORT
         pffft_transform_ordered(fftSetup, fftTmpC, fftTmpR, nullptr, PFFFT_BACKWARD);
-#else
-        fftw_execute(fftPlanInv);
-#endif
 
         for (long k = 0; k < fftFrameSize; ++k) {
             gOutputAccum[k] +=

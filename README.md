@@ -14,7 +14,6 @@ Building
 
 Dependencies:
   -  pthread
-  -  fftw3  (Optional FFTW build)
 
 For cmake build:
 
@@ -59,5 +58,3 @@ To disable:
 
 By default the Bypass will pass through the voice (modulator). You can build with -DUseCarrierBypass=ON if you prefer
 the bypass use the carrier.
-
-The default build uses the PFFFT library. You can build using the FFTW library using -DUsePFFFT=OFF.

@@ -7,7 +7,6 @@ project (Vocoder)
 set (PACKAGE_VERSION "1.1.2")
 
 option (BuildForDebug "Include gdb debugging support" OFF)
-option (UsePFFFT "Use the PFFFT library instead of FFTW" ON)
 option (UseCarrierBypass "Use the carrier as pass through on bypass (default voice)" OFF)
 option (BuildLADSPA "Build LADSPA version" ON)
 option (BuildLV2 "Build LV2 version" ON)
@@ -41,17 +40,6 @@ if (UseCarrierBypass)
     add_definitions(-D'USE_CARRIER_ON_BYPASS=1')
 endif (UseCarrierBypass)
 
-if (UsePFFFT)
-    message(STATUS "Using PFFFT library")
-    add_definitions(-D'PFFFT_SUPPORT=1')
-else (UsePFFFT)
-    find_package (PkgConfig REQUIRED)
-    pkg_check_modules(FFTW3 REQUIRED fftw3>=0.22 fftw3f>=0.22)
-    message(STATUS "Using FFTW3 library")
-    set(ExternLibraries
-        fftw3
-    )
-endif (UsePFFFT)
 
 if (BuildForDebug)
     set (CMAKE_BUILD_TYPE "Debug")

@@ -29,12 +29,7 @@
 #include <cstring>
 #include <cmath>
 
-#ifdef PFFFT_SUPPORT
-    #include <pffft/pffft.h>
-#else
-    #include <fftw3.h>
-    #include <pthread.h>
-#endif
+#include <pffft/pffft.h>
 
 #define MAX_FRAME_LENGTH 4096
 
@@ -85,20 +80,11 @@ private:
     bool gInit;
     uint32_t rngState;
 
-#ifdef PFFFT_SUPPORT
     typedef float fft_complex_t; // interleaved real/imag
     PFFFT_Setup* fftSetup;
     float *fftTmpR;
     float *fftTmpC;   // interleaved complex
     float *fftOldC;
-#else
-    typedef fftw_complex fft_complex_t;
-    fftw_plan fftPlanFwd;
-    fftw_plan fftPlanInv;
-    double        *fftTmpR;
-    fft_complex_t *fftTmpC;
-    fft_complex_t *fftOldC;
-#endif
 
     // DSP helpers
     void spectralEnvelope(float *env,
