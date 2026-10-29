@@ -7,11 +7,9 @@ if(BuildLV2)
 
 message(STATUS "Building LV2 Plugin")
 
-if (UsePFFFT)
-    add_library(Vocoder_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
-else()
-    add_library(Vocoder_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp)
-endif()
+
+add_library(Vocoder_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
+
 
 set_target_properties(Vocoder_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
 set_target_properties(Vocoder_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
@@ -43,11 +41,9 @@ if(BuildLADSPA)
 
 message(STATUS "Building LADSPA Plugin")
 
-if (UsePFFFT)
-    add_library(Vocoder_ladspa SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
-else()
-    add_library(Vocoder_ladspa SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp)
-endif()
+
+add_library(Vocoder_ladspa SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
+
 
 set_target_properties(Vocoder_ladspa PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LADSPA")
 set_target_properties(Vocoder_ladspa PROPERTIES LIBRARY_OUTPUT_DIRECTORY "ladspa")
@@ -68,11 +64,7 @@ if(BuildCLAP)
 
 message(STATUS "Building CLAP Plugin")
 
-if (UsePFFFT)
-    add_library(Vocoder_clap SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
-else()
-    add_library(Vocoder_clap SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp)
-endif()
+add_library(Vocoder_clap SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
 
 set_target_properties(Vocoder_clap PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_CLAP")
 set_target_properties(Vocoder_clap PROPERTIES LIBRARY_OUTPUT_DIRECTORY "clap")
@@ -94,11 +86,8 @@ if(BuildVST2)
 
 message(STATUS "Building VST2 Plugin")
 
-if (UsePFFFT)
-    add_library(Vocoder_vst2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
-else()
-    add_library(Vocoder_vst2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp)
-endif()
+add_library(Vocoder_vst2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
+
 
 set_target_properties(Vocoder_vst2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
 set_target_properties(Vocoder_vst2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
@@ -120,11 +109,7 @@ if(BuildVST3)
 
 message(STATUS "Building VST3 Plugin")
 
-if (UsePFFFT)
-    add_library(Vocoder_vst3 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
-else()
-    add_library(Vocoder_vst3 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp)
-endif()
+add_library(Vocoder_vst3 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DSP.cpp Vocoder.cpp pffft/pffft.c)
 
 # Determine architecture automatically
 if(NOT DEFINED VST3_ARCH)
